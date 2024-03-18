@@ -2,8 +2,20 @@
 title: "HW5_yq2378"
 author: "Qi Yumeng"
 date: "2024-03-17"
-output: pdf_document
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    toc: yes
+    toc_depth: 3
+  header-includes:
+    -\usepackage{fancyhdr}
+    -\usepackage{lipsum}
+    -\pagestyle{fancy}
+    -\fancyhead[R]{\thepage}
+    -\fancypagestyle{plain}{\pagestyle{fancy}}
 ---
+
+\newpage
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -12,8 +24,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r load package data}
 library(tidyverse)
+library(pscl)
 crab = readxl::read_excel("/Users/luchen/Documents/P8131 Biostatistics Method 2/P8131 HW/Data/HW5-crab.xlsx")
-parasite = read.delim("/Users/luchen/Documents/P8131 Biostatistics Method 2/P8131 HW/Data/HW5-parasite.txt")
+parasite = read.delim("/Users/luchen/Documents/P8131 Biostatistics Method 2/P8131 HW/Data/HW5-parasite.txt") |>
+  mutate(Year = factor(Year,levels = c(1999,2000,2001),),
+         Area = factor(Area, levels = c(1,2,3,4)))
 ```
 ## a
 ```{r crab-a}
@@ -58,7 +73,6 @@ Wt: The estimated coefficient for variable Wt is `r round(crab_m2[["coefficients
 
 *Model Fit*
 
-Under the assumption of the mean and variance of the distribution are equal, the residual deviance if `r round( crab_m2[["deviance"]],3)` on `r round(crab_m2[["df.residual"]],3)` degrees of freedom. Compared to the null deviance and the M1 deviance, there is little deduction. Also, the deviance is still relatively large compared to the degree of freedom. What's more, the AIC IS `r round(crab_m2[["aic"]],3)`, still quite large. To sum up, M2 slightly improves the interpretability of the model.
 
 ```{r crab deviance analysis}
 ## deviance analysis (ignoring the over dispersion)
@@ -96,11 +110,72 @@ summary(crab_m2,dispersion=phi)
 
 If we add the over dispersion parameter in the M2, both the coefficients of W and Wt have larger standard errors and also, their z values are no more significant.
 
+\newpage
 
-# parasite
+# Parasite
 ## a
- area, year, and length as predictors. Interpret each model parameter.
 ```{r build parasite }
 parasite_m1 <- glm(Intensity~ Area + Year + Length, family=poisson(link=log), data=parasite)
-summary(parasite_m1)
+parasite_s1 <- summary(parasite_m1)
+parasite_s1
 ```
+
+*Coefficients*
+
+The model takes Area1 and Year1999 as baseline. 
+
+Area: The estimated coefficients for variable Area2,3,4 are `r round(parasite_m1[["coefficients"]][2],3)`, `r round(parasite_m1[["coefficients"]][3],3)`, `r round(parasite_m1[["coefficients"]][4],3)` with standard errors of `r round(sqrt(diag(vcov(parasite_m1)))[2],3)`, `r round(sqrt(diag(vcov(parasite_m1)))[3],3)`, `r round(sqrt(diag(vcov(parasite_m1)))[4],3)`. This means, being Area 2, Area 3 will decrease the expected change in the log of Intensity, while being Area 4 will increase it, holding Year and Length the same. The p-values are less than 0.05, indicating the coefficients are significantly different from 0.
+
+Year: The estimated coefficients for variable Year2000, 2001 are `r round(parasite_m1[["coefficients"]][5],3)` and `r round(parasite_m1[["coefficients"]][6],3)`, with standard errors of `r round(sqrt(diag(vcov(parasite_m1)))[5],3)`, `r round(sqrt(diag(vcov(parasite_m1)))[6],3)`. 
+This means, being Year 2000 will increase the log of Intensity while being Year 2002 will decrease the outcome, holding Year1999 as benchmark and other variables the same. The p-values are less than 0.05, indicating the coefficients are significantly different from 0.
+
+Length: The estimated coefficient for variable Year is `r round(parasite_m1[["coefficients"]][7],3)` with a standard error of `r round(sqrt(diag(vcov(parasite_m1)))[7],3)`. This means, for a one-unit increase in Length, the expected change in the log of Intensity is `r round(parasite_m1[["coefficients"]][7],3)`, holding the rest variables the same. The z value is `r round(parasite_s1$coefficients[, "z value"][7],3)`, and the p-value is also near zero, indicating the influence of Length on Intensity is significantly different from 0 under the significance value of 0.05. 
+ 
+ 
+## b
+
+
+```{r para goodness of fit}
+res.p3=residuals(parasite_m1,type='pearson',data=parasite)  # exactly the same as pearson residual for wave.glm3
+G3=sum(res.p3^2) # calc dispersion param based on full model
+pval=1-pchisq(G3,df=1184) # lack of fit
+pval
+```
+Under the assumption of the mean and variance of the distribution are equal, the residual deviance if `r round( parasite_m1[["deviance"]],3)` on `r round(parasite_m1[["df.residual"]],3)` degrees of freedom. Compared to the null deviance, there is little deduction. If we further test the goodness of fit of the model, we have a near zero pvalue, indicating the model is lack of fit. Also, the deviance is still relatively large compared to the degree of freedom. What's more, the AIC IS `r round(parasite_m1[["aic"]],3)`, still quite large. 
+
+## c
+
+
+```{r para-c}
+parasite_m2 <- zeroinfl(Intensity~ Area + Year + Length, data = parasite) 
+
+summary(parasite_m2)
+
+```
+
+
+*Count Model Coefficients (Poisson Part)*
+
+Intercept (3.8432): The log of the expected count of parasites for a fish from Area1 in the base year 1999 with a length of 0.
+
+Area2 (0.2688), Area3 (0.1463), Area4 (0.9448): These coefficients represent the log difference in the expected count of parasites for fish in Areas 2, 3, and 4, respectively, compared to Area1, all else being equal. Area4 has a significantly higher expected parasite count.
+
+
+Year2000 (0.3920), Year2001 (-0.0448): Indicates the log difference in the expected count of parasites for the years 2000 and 2001 compared to the base year, respectively. There's an increase in 2000 and a slight, non-significant decrease in 2001.
+
+
+Length (-0.0368): For each unit increase in fish length, there's a log decrease in the expected count of parasites. Larger fish have fewer parasites, all else being equal.
+
+
+*Zero-inflation Model Coefficients (Binomial Part)*
+
+
+Intercept (0.5526): The log-odds of a fish being from the zero-inflated (not susceptible to parasites) group for a fish from Area1 in the base year with a length of 0.
+
+Area2 (0.7187), Area3 (0.6577), Area4 (-1.0229): The log-odds ratio of being in the zero-inflated group for fish in these areas compared to Area1. Fish in Area4 are less likely to be in the zero-inflated group.
+
+
+Year2000 (-0.7521), Year2001 (0.4565): The change in log-odds of being in the zero-inflated group for these years compared to the base year. There's a decrease in 2000, suggesting more fish were susceptible to parasites, and an increase in 2001.
+
+
+Length (-0.0099): For each unit increase in fish length, the log-odds of being in the zero-inflated group slightly decreases.
