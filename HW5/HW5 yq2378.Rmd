@@ -1,0 +1,106 @@
+---
+title: "HW5_yq2378"
+author: "Qi Yumeng"
+date: "2024-03-17"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Crab
+
+```{r load package data}
+library(tidyverse)
+crab = readxl::read_excel("/Users/luchen/Documents/P8131 Biostatistics Method 2/P8131 HW/Data/HW5-crab.xlsx")
+parasite = read.delim("/Users/luchen/Documents/P8131 Biostatistics Method 2/P8131 HW/Data/HW5-parasite.txt")
+```
+## a
+```{r crab-a}
+# ggplot(crab, aes(Sa)) + geom_density()
+# fit Poisson log linear model
+crab_m1 <- glm(Sa~W, family=poisson(link=log), data=crab)
+crab_s1 <- summary(crab_m1) 
+crab_s1
+
+res.p1=residuals(crab_m1,type='pearson',data=crab)  # exactly the same as pearson residual for wave.glm3
+G1=sum(res.p1^2) # calc dispersion param based on full model
+pval=1-pchisq(G1,df=171) 
+pval
+```
+*Coefficients*
+
+
+(Intercept): The estimated intercept is `r round(crab_m1[["coefficients"]][1],3)` with a standard error of `r round(sqrt(diag(vcov(crab_m1)))[1],3)`. The z value is `r round(crab_s1$coefficients[, "z value"][1],3)`, and the p-value is very small, indicating that the intercept is significantly different from zero.
+
+
+W: The estimated coefficient for variable W is `r round(crab_m1[["coefficients"]][2],3)` with a standard error of `r round(sqrt(diag(vcov(crab_m1)))[2],3)`. This means, for a one-unit increase in carapace width (W), the expected change in the log of satellites is `r round(crab_m1[["coefficients"]][2],3)`. The z value is `r round(crab_s1$coefficients[, "z value"][2],3)`, and the p-value is extremely small (< 2e-16), indicating a very strong evidence against the null hypothesis (which would be that this coefficient is zero), suggesting that W has a significant positive effect on satellites(Sa). 
+
+*Model Fit*
+
+Under the assumption of the mean and variance of the distribution are equal, the residual deviance if `r round( crab_m1[["deviance"]],3)` on `r round(crab_m1[["df.residual"]],3)` degrees of freedom. Compared to the null deviance, there is little deduction. Also, the deviance is relatively large compared to the degree of freedom. If we calculate the dispersion parameter based on M1, we have a near zero pvalue, indicating M1 is lack of fit. What's more, the AIC IS `r round(crab_m1[["aic"]],3)`, quite large. All in all, M1 model doesn't seem like a good fit.
+
+
+
+## b
+
+```{r crab-b}
+crab_m2 <- glm(Sa~W + Wt, family=poisson, data=crab)
+crab_s2 <- summary(crab_m2) 
+crab_s2
+```
+*Coefficients*
+
+W: The estimated coefficient for variable W is `r round(crab_m2[["coefficients"]][2],3)` with a standard error of `r round(sqrt(diag(vcov(crab_m2)))[2],3)`. This means, for a one-unit increase in carapace width (W), the expected change in the log of satellites is `r round(crab_m2[["coefficients"]][2],3)`, holding Wt. Compared to M1, the coefficient is smaller and the standard error is larger, indicating M1 might have over-dispersion. The z value is `r round(crab_s2$coefficients[, "z value"][2],3)`, and the p-value is `r round(crab_s2$coefficients[, "Pr(>|z|)"][2],4)`, indicating the influence of W on Sa is not significantly different from 0 anymore. 
+
+Wt: The estimated coefficient for variable Wt is `r round(crab_m2[["coefficients"]][3],3)` with a standard error of `r round(sqrt(diag(vcov(crab_m2)))[3],3)`. This means, for a one-unit increase in weight (Wt), the expected change in the log of satellites is `r round(crab_m2[["coefficients"]][3],3)`, holding W. The z value is `r round(crab_s2$coefficients[, "z value"][3],3)`, and the p-value is `r round(crab_s2$coefficients[, "Pr(>|z|)"][3],4)`, indicating the influence of Wt on Sa is significantly different from 0. Also, compared to W, Wt has a stronger impact on Sa.
+
+
+*Model Fit*
+
+Under the assumption of the mean and variance of the distribution are equal, the residual deviance if `r round( crab_m2[["deviance"]],3)` on `r round(crab_m2[["df.residual"]],3)` degrees of freedom. Compared to the null deviance and the M1 deviance, there is little deduction. Also, the deviance is still relatively large compared to the degree of freedom. What's more, the AIC IS `r round(crab_m2[["aic"]],3)`, still quite large. To sum up, M2 slightly improves the interpretability of the model.
+
+```{r crab deviance analysis}
+## deviance analysis (ignoring the over dispersion)
+test.stat=crab_m1$deviance-crab_m2$deviance
+df=1 
+pval=1-pchisq(test.stat,df=df) # chisq test
+pval # rej, go with the bigger model
+```
+
+If we compared M1 and M2 with deviance analysis and ignore the over dispersion. We reject the null hypothesis and conclude that M2 should be reserve instead of M1.
+
+## c
+
+```{r dispersion}
+### estimate the dispersion parameter (from the additive model)
+# the traditional way of calc constant dispersion parameter
+res.p2=residuals(crab_m2,type='pearson',data=crab)  # exactly the same as pearson residual for wave.glm3
+G2=sum(res.p2^2) # calc dispersion param based on full model
+pval=1-pchisq(G2,df=170) # lack of fit
+phi=G1/170
+
+crab_m2$deviance/crab_m2$df.residual 
+
+plot(qnorm((173+1:173+0.5)/(2*173+1.125)),
+     sort(abs(res.p2)),xlab='Expected Half-Normal Order Stats',ylab='Ordered Abs Pearson Residuals')
+abline(a=0,b=1)
+abline(a=0,b=sqrt(phi),lty=2)  # controversial? 
+```
+
+We first prove that M2 is also lack of fit and the dispersion parameter is around 3. The half normal plot could further prove the over dispersion.
+
+```{r crab- c over dispersion update}
+summary(crab_m2,dispersion=phi)
+```
+
+If we add the over dispersion parameter in the M2, both the coefficients of W and Wt have larger standard errors and also, their z values are no more significant.
+
+
+# parasite
+## a
+ area, year, and length as predictors. Interpret each model parameter.
+```{r build parasite }
+parasite_m1 <- glm(Intensity~ Area + Year + Length, family=poisson(link=log), data=parasite)
+summary(parasite_m1)
+```
